@@ -16,7 +16,7 @@ function App() {
           {/* Header */}
           <div className="pt-8 pb-3 px-4 text-white font-bold text-center bg-black/20">
             <h1 className="text-xl tracking-tight">StudyMind</h1>
-            <p className="text-[10px] text-gray-400">Gestiona tus tareas y emociones</p>
+            <p className="text-[10px] text-gray-400">Gestiona tus tareas.</p>
           </div>
 
           {/* Contenido principal - CORREGIDO */}

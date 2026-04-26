@@ -7,43 +7,49 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-// 📝 Función para calcular tiempo REAL según prioridad y palabras clave
+// 🔥 TIEMPOS FORZADOS - SIN EXCEPCIONES
 function getRealStudyTime(task) {
-  let minutes = 25;
+  const text = task.text.toLowerCase();
+  const priority = task.priority;
   
-  // Tiempo base por prioridad
-  if (task.priority === 'alta') minutes = 45;
-  if (task.priority === 'baja') minutes = 20;
-  if (task.priority === 'media') minutes = 30;
-  
-  // Materias difíciles requieren más tiempo
-  const hardSubjects = ['Matemáticas', 'Programación', 'Física', 'Química', 'Cálculo', 'Álgebra'];
-  if (task.subject && hardSubjects.some(s => task.subject.includes(s))) {
-    minutes += 15;
+  // ========== 1. PARCIALES Y EXÁMENES (máxima prioridad) ==========
+  if (text.includes('parcial') || text.includes('examen') || text.includes('final') || text.includes('quiz')) {
+    return 210; // 3.5 horas
   }
   
-  // Palabras clave que indican más tiempo necesario
-  const keywords = ['examen', 'parcial', 'final', 'proyecto', 'trabajo final', 'investigación', 'tesis'];
-  if (keywords.some(k => task.text.toLowerCase().includes(k))) {
-    minutes += 20;
+  // ========== 2. PROYECTOS GRANDES ==========
+  if (text.includes('proyecto') || text.includes('trabajo final') || text.includes('investigación') || text.includes('tesis')) {
+    return 210; // 3.5 horas
   }
   
-  // Si es muy urgente (prioridad alta + palabras clave)
-  if (task.priority === 'alta' && keywords.some(k => task.text.toLowerCase().includes(k))) {
-    minutes += 15;
+  // ========== 3. TALLERES, LABORATORIOS ==========
+  if (text.includes('taller') || text.includes('laboratorio') || text.includes('actividad práctica') || text.includes('workshop')) {
+    return 150; // 2.5 horas
   }
   
-  return minutes;
+  // ========== 4. POR PRIORIDAD (FORZADO) ==========
+  if (priority === 'alta') {
+    return 180; // 3 horas
+  }
+  
+  if (priority === 'media') {
+    return 150; // 2.5 horas
+  }
+  
+  if (priority === 'baja') {
+    return 90; // 1.5 horas (90 minutos)
+  }
+  
+  // Fallback (nunca debería llegar aquí)
+  return 90;
 }
 
 function getBreakTime(priority, studyMinutes) {
-  // Descanso proporcional al tiempo de estudio
-  if (priority === 'alta') return Math.min(15, Math.floor(studyMinutes * 0.25));
-  if (priority === 'media') return 10;
-  return 8;
+  if (priority === 'alta') return 20;
+  if (priority === 'media') return 15;
+  return 12;
 }
 
-// 📝 Función para generar plan de estudio
 function generateStudyPlan(tasks) {
   const incompleteTasks = tasks.filter(t => !t.completed);
   const completedTasks = tasks.filter(t => t.completed);
@@ -53,12 +59,13 @@ function generateStudyPlan(tasks) {
       title: "🎉 ¡Felicidades!",
       summary: "Has completado todas tus tareas. ¡Tómate un merecido descanso!",
       plan: [],
-      quote: "El descanso también es parte del éxito. 🌟",
       totalStudyTime: "0 minutos",
       totalBreakTime: "0 minutos",
       totalTime: "0 minutos",
       completedTasks: completedTasks.length,
-      pendingTasks: 0
+      pendingTasks: 0,
+      quote: "El descanso también es parte del éxito. 🌟",
+      tip: "¡Excelente trabajo! Sigue así."
     };
   }
 
@@ -74,18 +81,19 @@ function generateStudyPlan(tasks) {
     
     let recomendacion = "";
     if (task.priority === 'alta') {
-      recomendacion = "⚠️ Prioridad alta - Haz esto primero hoy. Requiere máxima concentración.";
+      recomendacion = "⚠️ Prioridad ALTA - Haz esto PRIMERO. Requiere máxima concentración.";
     } else if (task.priority === 'media') {
-      recomendacion = "📌 Prioridad media - Programa para hoy o mañana.";
+      recomendacion = "📌 Prioridad MEDIA - Programa para hoy o mañana.";
     } else {
-      recomendacion = "✅ Prioridad baja - Puedes hacerlo cuando tengas tiempo libre.";
+      recomendacion = "✅ Prioridad BAJA - Puedes hacerlo cuando tengas tiempo.";
     }
     
-    if (task.text.toLowerCase().includes('examen')) {
-      recomendacion += " 📝 Especial atención: ¡Es un examen! Repasa con anticipación.";
+    if (task.text.toLowerCase().includes('parcial') || task.text.toLowerCase().includes('examen')) {
+      recomendacion = "🎯 ¡ES UN PARCIAL/EXAMEN! Esto es prioritario. Dedícale el tiempo necesario y repasa con anticipación.";
     }
-    if (task.text.toLowerCase().includes('parcial')) {
-      recomendacion += " 🎯 ¡Parcial importante! Dedícale tiempo extra.";
+    
+    if (task.text.toLowerCase().includes('workshop') || task.text.toLowerCase().includes('taller')) {
+      recomendacion = "🔧 Es un taller/workshop. Requiere práctica activa y atención.";
     }
     
     return {
@@ -93,7 +101,7 @@ function generateStudyPlan(tasks) {
       task: task.text,
       subject: task.subject || 'General',
       priority: task.priority,
-      studyTime: `${studyMinutes} minutos`,
+      studyTime: `${studyMinutes} minutos (${Math.floor(studyMinutes / 60)}h ${studyMinutes % 60}min)`,
       studySeconds: studyMinutes * 60,
       breakTime: `${breakMinutes} minutos`,
       breakSeconds: breakMinutes * 60,
@@ -102,7 +110,6 @@ function generateStudyPlan(tasks) {
     };
   });
 
-  // Cálculos totales precisos
   const totalStudyMinutes = plan.reduce((acc, p) => acc + parseInt(p.studyTime), 0);
   const totalBreakMinutes = plan.reduce((acc, p) => acc + parseInt(p.breakTime), 0);
   const totalMinutes = totalStudyMinutes + totalBreakMinutes;
@@ -111,7 +118,7 @@ function generateStudyPlan(tasks) {
 
   return {
     title: "📚 Tu Plan de Estudio Personalizado",
-    summary: `Basado en tus ${incompleteTasks.length} tareas pendientes. Sigue este orden para optimizar tu tiempo.`,
+    summary: `Basado en tus ${incompleteTasks.length} tareas pendientes. Sigue este orden:`,
     totalStudyTime: `${totalStudyMinutes} minutos (${Math.floor(totalStudyMinutes / 60)}h ${totalStudyMinutes % 60}min)`,
     totalBreakTime: `${totalBreakMinutes} minutos (${Math.floor(totalBreakMinutes / 60)}h ${totalBreakMinutes % 60}min)`,
     totalTime: totalHours > 0 
@@ -130,45 +137,36 @@ function getMotivationalQuote() {
     "✨ El éxito es la suma de pequeños esfuerzos repetidos día tras día.",
     "💪 No tienes que ser genial para empezar, pero tienes que empezar para ser genial.",
     "🎯 La disciplina es el puente entre metas y logros.",
-    "🌟 Cada día es una nueva oportunidad para acercarte a tus metas.",
-    "📚 El estudio no es cuestión de tiempo, es cuestión de dedicación.",
-    "🧠 Tu cerebro es como un músculo: entre más lo usas, más fuerte se vuelve.",
-    "⚡ Pequeños progresos cada día llevan a grandes resultados."
+    "🌟 Cada día es una nueva oportunidad para acercarte a tus metas."
   ];
   return quotes[Math.floor(Math.random() * quotes.length)];
 }
 
 function getStudyTip() {
   const tips = [
-    "Usa la técnica Pomodoro: 25-45 min estudio, 5-10 min descanso según la dificultad",
-    "Elimina distracciones (celular en modo avión o en otra habitación)",
-    "Toma agua cada hora para mantenerte hidratado y concentrado",
-    "Haz pausas activas: estira tu cuerpo cada 2 horas",
-    "Revisa tu progreso al final del día para motivarte",
-    "Estudia en bloques de tiempo cortos pero intensos",
-    "Enseña lo que aprendes: es la mejor forma de afianzar conocimiento"
+    "Para parciales: estudia en bloques de 2 horas con descansos de 20 minutos",
+    "Elimina distracciones (celular en modo avión)",
+    "Toma agua cada hora para mantenerte hidratado",
+    "Haz resúmenes y mapas mentales para estudiar mejor"
   ];
   return tips[Math.floor(Math.random() * tips.length)];
 }
 
-// Endpoint principal
 app.post('/api/plan', (req, res) => {
   const { tasks } = req.body;
-  
+  console.log("📋 Recibidas tareas:", tasks.length);
   if (!tasks || !Array.isArray(tasks)) {
     return res.status(400).json({ error: 'Se requieren tareas válidas' });
   }
-  
   const plan = generateStudyPlan(tasks);
+  console.log("📚 Plan generado con tiempos:", plan.plan.map(p => `${p.task}: ${p.studyTime}`));
   res.json(plan);
 });
 
-// Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'LLM Simulator running 🚀' });
+  res.json({ status: 'ok', message: 'Backend funcionando' });
 });
 
 app.listen(PORT, () => {
-  console.log(`🧠 LLM Simulator running on http://localhost:${PORT}`);
-  console.log(`📝 Endpoint: POST http://localhost:${PORT}/api/plan`);
+  console.log(`🧠 Backend corriendo en http://localhost:${PORT}`);
 });

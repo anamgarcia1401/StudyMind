@@ -42,6 +42,8 @@ function getRealStudyTime(task) {
     text.includes('enviar') ||
     text.includes('terminar') ||
     text.includes('actividad práctica') ||
+    text.includes('entrega') ||
+    text.includes('entregar') ||
     text.includes('actividad')
   ) {
     return 90; // 1.5 horas

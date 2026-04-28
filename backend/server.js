@@ -10,44 +10,51 @@ app.use(express.json());
 // 🔥 TIEMPOS FORZADOS - SIN EXCEPCIONES
 function getRealStudyTime(task) {
   const text = task.text.toLowerCase();
-  const priority = task.priority;
-  
-  // ========== 1. PARCIALES Y EXÁMENES (máxima prioridad) ==========
-  if (text.includes('parcial') || text.includes('examen') || text.includes('final') || text.includes('quiz')) {
+
+  // ========== 1. TAREAS DE 3.5 HORAS ==========
+  if (
+    text.includes('parcial') ||
+    text.includes('examen') ||
+    text.includes('quiz') ||
+    text.includes('proyecto final') ||
+    text.includes('trabajo final') ||
+    text.includes('repaso') ||
+    text.includes('repasar')
+  ) {
     return 210; // 3.5 horas
   }
-  
-  // ========== 2. PROYECTOS GRANDES ==========
-  if (text.includes('proyecto') || text.includes('trabajo final') || text.includes('investigación') || text.includes('tesis')) {
-    return 210; // 3.5 horas
-  }
-  
-  // ========== 3. TALLERES, LABORATORIOS ==========
-  if (text.includes('taller') || text.includes('laboratorio') || text.includes('actividad práctica') || text.includes('workshop')) {
+
+  // ========== 2. TAREAS DE 2.5 HORAS ==========
+  if (
+    text.includes('workshop') ||
+    text.includes('ensayo') ||
+    text.includes('entrega') ||
+    text.includes('trabajo') ||
+    text.includes('taller')
+  ) {
     return 150; // 2.5 horas
   }
-  
-  // ========== 4. POR PRIORIDAD (FORZADO) ==========
-  if (priority === 'alta') {
-    return 180; // 3 horas
+
+  // ========== 3. TAREAS CORTAS ==========
+  if (
+    text.includes('tarea') ||
+    text.includes('revisar') ||
+    text.includes('enviar') ||
+    text.includes('terminar') ||
+    text.includes('actividad práctica') ||
+    text.includes('actividad')
+  ) {
+    return 90; // 1.5 horas
   }
-  
-  if (priority === 'media') {
-    return 150; // 2.5 horas
-  }
-  
-  if (priority === 'baja') {
-    return 90; // 1.5 horas (90 minutos)
-  }
-  
-  // Fallback (nunca debería llegar aquí)
+
+  // ========== FALLBACK ==========
   return 90;
 }
 
 function getBreakTime(priority, studyMinutes) {
-  if (priority === 'alta') return 20;
-  if (priority === 'media') return 15;
-  return 12;
+  if (priority === 'alta') return 30;
+  if (priority === 'media') return 20;
+  return 10;
 }
 
 function generateStudyPlan(tasks) {

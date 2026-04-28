@@ -8,6 +8,71 @@ type PomodoroTask = {
   completed: boolean;
 };
 
+// 🔥 SONIDO (usando Web Audio API)
+const playNotificationSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 880; // Nota La5
+    gainNode.gain.value = 0.3;
+    
+    oscillator.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 1);
+    oscillator.stop(audioContext.currentTime + 0.5);
+  } catch (e) {
+    console.log("Web Audio no soportado, usando alternativa");
+    // Fallback: intentar con Audio
+    try {
+      const audio = new Audio();
+      // Crear un beep simple con un data URI (silencioso pero funciona)
+      audio.src = "data:audio/wav;base64,U3RlYWx0aCBzb3VuZCBub3QgYXZhaWxhYmxl";
+      audio.play().catch(() => {});
+    } catch (err) {}
+  }
+};
+
+// 🔥 SEGUNDO SONIDO (para el descanso, diferente tono)
+const playBreakSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 440; // Nota La4 (más grave)
+    gainNode.gain.value = 0.3;
+    
+    oscillator.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 1);
+    oscillator.stop(audioContext.currentTime + 0.5);
+  } catch (e) {
+    console.log("Web Audio no soportado");
+  }
+};
+
+// 🔥 NOTIFICACIÓN DEL NAVEGADOR
+const showBrowserNotification = (title: string, body: string) => {
+  if (Notification.permission === "granted") {
+    new Notification(title, { body, icon: "/favicon.svg" });
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+};
+
+// 🔥 SOLICITAR PERMISO PARA NOTIFICACIONES AL INICIAR
+const requestNotificationPermission = () => {
+  if (Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+};
+
 export default function Pomodoro() {
   const [tasks, setTasks] = useState<PomodoroTask[]>([]);
   const [index, setIndex] = useState(0);
@@ -15,6 +80,12 @@ export default function Pomodoro() {
   const [mode, setMode] = useState<"study" | "break">("study");
   const [active, setActive] = useState(false);
   const [completed, setCompleted] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+
+  // Solicitar permiso para notificaciones al cargar
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   // 🔥 Cargar plan desde localStorage
   const loadPlan = () => {
@@ -34,7 +105,6 @@ export default function Pomodoro() {
         return;
       }
 
-      // Cargar tareas completadas actuales de Tasks
       const savedTasks = localStorage.getItem("tasks");
       const completedTasksTexts = savedTasks ? 
         JSON.parse(savedTasks).filter((t: any) => t.completed === true).map((t: any) => t.text) : [];
@@ -52,7 +122,6 @@ export default function Pomodoro() {
 
       setTasks(newTasks);
       
-      // Encontrar la primera tarea NO completada
       let firstPendingIndex = -1;
       for (let i = 0; i < newTasks.length; i++) {
         if (newTasks[i].completed === false) {
@@ -123,41 +192,57 @@ export default function Pomodoro() {
     return () => clearInterval(interval);
   }, [active, time]);
 
-  // Manejar cuando el tiempo llega a 0
+  // 🔥 Manejar cuando el tiempo llega a 0 (CON SONIDO Y NOTIFICACIÓN)
   useEffect(() => {
     if (time > 0) return;
     if (tasks.length === 0) return;
 
     if (mode === "study") {
+      // 🔥 SONIDO Y NOTIFICACIÓN AL TERMINAR ESTUDIO
+      if (audioEnabled) playNotificationSound();
+      showBrowserNotification("✅ ¡Tiempo de estudio completado!", 
+        `Has terminado de estudiar "${tasks[index]?.text}". ¡Tómate un descanso!`);
+      
       completeCurrentTask();
     } else {
+      // 🔥 SONIDO Y NOTIFICACIÓN AL TERMINAR DESCANSO
+      if (audioEnabled) playBreakSound();
+      showBrowserNotification("☕ ¡Descanso terminado!", 
+        "Es hora de volver al estudio. ¡Continúa con la siguiente tarea!");
+      
       goToNextTask();
     }
   }, [time, mode, tasks.length]);
 
   const completeCurrentTask = () => {
-    const currentTask = tasks[index];
-    
-    const updatedTasks = [...tasks];
-    updatedTasks[index].completed = true;
-    setTasks(updatedTasks);
+  const currentTask = tasks[index];
+  
+  // 🔥 SONIDO AL COMPLETAR MANUALMENTE
+  if (audioEnabled) {
+    playNotificationSound(); // o un sonido diferente
+  }
+  showBrowserNotification("✅ ¡Tarea completada!", 
+    `Has terminado "${currentTask.text}". ¡Bien hecho!`);
+  
+  const updatedTasks = [...tasks];
+  updatedTasks[index].completed = true;
+  setTasks(updatedTasks);
 
-    const savedTasks = localStorage.getItem("tasks");
-    if (savedTasks) {
-      const allTasks = JSON.parse(savedTasks);
-      const taskToComplete = allTasks.find((t: any) => t.text === currentTask.text);
-      if (taskToComplete && !taskToComplete.completed) {
-        taskToComplete.completed = true;
-        localStorage.setItem("tasks", JSON.stringify(allTasks));
-        window.dispatchEvent(new Event("tasksUpdated"));
-      }
+  const savedTasks = localStorage.getItem("tasks");
+  if (savedTasks) {
+    const allTasks = JSON.parse(savedTasks);
+    const taskToComplete = allTasks.find((t: any) => t.text === currentTask.text);
+    if (taskToComplete && !taskToComplete.completed) {
+      taskToComplete.completed = true;
+      localStorage.setItem("tasks", JSON.stringify(allTasks));
+      window.dispatchEvent(new Event("tasksUpdated"));
     }
+  }
 
-    setMode("break");
-    setTime(currentTask.breakTime);
-    setActive(false);
-  };
-
+  setMode("break");
+  setTime(currentTask.breakTime);
+  setActive(false);
+};
   const goToNextTask = () => {
     const nextIndex = index + 1;
     
@@ -238,6 +323,17 @@ export default function Pomodoro() {
 
   return (
     <div className="text-white p-4 space-y-6 text-center">
+
+      {/* Botón para activar/desactivar sonido */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setAudioEnabled(!audioEnabled)}
+          className={`text-xs px-2 py-1 rounded-full ${audioEnabled ? 'bg-green-500/50' : 'bg-red-500/50'}`}
+          title={audioEnabled ? "Sonido activado" : "Sonido desactivado"}
+        >
+          {audioEnabled ? "🔊 Sonido ON" : "🔇 Sonido OFF"}
+        </button>
+      </div>
 
       <div>
         <p className="text-xs text-gray-400">

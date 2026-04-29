@@ -1,76 +1,11 @@
-import { useState, useEffect } from "react";
-import { Play, Pause, RotateCcw, SkipForward, CheckCircle, Sparkles } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Play, Pause, RotateCcw, SkipForward, CheckCircle, Sparkles, Zap } from "lucide-react";
 
 type PomodoroTask = {
   text: string;
   studyTime: number;
   breakTime: number;
   completed: boolean;
-};
-
-// 🔥 SONIDO (usando Web Audio API)
-const playNotificationSound = () => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 880; // Nota La5
-    gainNode.gain.value = 0.3;
-    
-    oscillator.start();
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 1);
-    oscillator.stop(audioContext.currentTime + 0.5);
-  } catch (e) {
-    console.log("Web Audio no soportado, usando alternativa");
-    // Fallback: intentar con Audio
-    try {
-      const audio = new Audio();
-      // Crear un beep simple con un data URI (silencioso pero funciona)
-      audio.src = "data:audio/wav;base64,U3RlYWx0aCBzb3VuZCBub3QgYXZhaWxhYmxl";
-      audio.play().catch(() => {});
-    } catch (err) {}
-  }
-};
-
-// 🔥 SEGUNDO SONIDO (para el descanso, diferente tono)
-const playBreakSound = () => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 440; // Nota La4 (más grave)
-    gainNode.gain.value = 0.3;
-    
-    oscillator.start();
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 1);
-    oscillator.stop(audioContext.currentTime + 0.5);
-  } catch (e) {
-    console.log("Web Audio no soportado");
-  }
-};
-
-// 🔥 NOTIFICACIÓN DEL NAVEGADOR
-const showBrowserNotification = (title: string, body: string) => {
-  if (Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/favicon.svg" });
-  } else if (Notification.permission !== "denied") {
-    Notification.requestPermission();
-  }
-};
-
-// 🔥 SOLICITAR PERMISO PARA NOTIFICACIONES AL INICIAR
-const requestNotificationPermission = () => {
-  if (Notification.permission === "default") {
-    Notification.requestPermission();
-  }
 };
 
 export default function Pomodoro() {
@@ -81,17 +16,80 @@ export default function Pomodoro() {
   const [active, setActive] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Solicitar permiso para notificaciones al cargar
+  // 🔥 Función para iniciar AudioContext
+  const playSound = (frequency: number, duration: number, volume: number = 0.3) => {
+    if (!audioEnabled) return;
+    
+    try {
+      let audioContext = audioContextRef.current;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      }
+      
+      // Reanudar si está suspendido
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = frequency;
+      gainNode.gain.value = volume;
+      
+      oscillator.start();
+      gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + duration);
+      oscillator.stop(audioContext.currentTime + duration);
+    } catch (e) {
+      console.log("Error reproduciendo sonido:", e);
+    }
+  };
+
+  // 🔥 Alarma de estudio (aguda, repetitiva)
+  const playStudyAlarm = () => {
+    playSound(880, 0.3, 0.5);
+    setTimeout(() => playSound(880, 0.3, 0.5), 400);
+    setTimeout(() => playSound(880, 0.3, 0.5), 800);
+  };
+
+  // 🔥 Alarma de descanso (más grave)
+  const playBreakAlarm = () => {
+    playSound(523.25, 0.5, 0.4);
+  };
+
+  // 🔥 Sonido de completado manual (para demostración)
+  const playManualCompleteSound = () => {
+    // Sonido de "éxito" - ascendente
+    playSound(523.25, 0.2, 0.4);
+    setTimeout(() => playSound(659.25, 0.2, 0.4), 150);
+    setTimeout(() => playSound(783.99, 0.3, 0.4), 300);
+  };
+
+  // 🔥 Notificación
+  const showNotification = (title: string, body: string) => {
+    if (Notification.permission === "granted") {
+      new Notification(title, { body });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission();
+    }
+  };
+
+  // Solicitar permiso al inicio
   useEffect(() => {
-    requestNotificationPermission();
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
   }, []);
 
-  // 🔥 Cargar plan desde localStorage
   const loadPlan = () => {
     const plan = localStorage.getItem("studyPlan");
-    console.log("📋 Cargando plan:", plan);
-
     if (!plan) {
       setTasks([]);
       return;
@@ -99,7 +97,6 @@ export default function Pomodoro() {
 
     try {
       const parsed = JSON.parse(plan);
-      
       if (!parsed.plan || parsed.plan.length === 0) {
         setTasks([]);
         return;
@@ -146,15 +143,10 @@ export default function Pomodoro() {
     }
   };
 
-  // Cargar al inicio y cuando se genera un nuevo plan
   useEffect(() => {
     loadPlan();
 
-    const handlePlanUpdate = () => {
-      console.log("🔄 Plan actualizado, recargando...");
-      loadPlan();
-    };
-
+    const handlePlanUpdate = () => loadPlan();
     const handleTasksUpdate = () => {
       const savedTasks = localStorage.getItem("tasks");
       if (savedTasks) {
@@ -180,69 +172,68 @@ export default function Pomodoro() {
     };
   }, []);
 
-  // Timer
+  // Timer con modo demo (acelerado)
   useEffect(() => {
     if (!active) return;
     if (time <= 0) return;
 
     const interval = setInterval(() => {
-      setTime(t => t - 1);
+      setTime(t => {
+        if (demoMode) {
+          // Modo demo: reduce 10 segundos por cada segundo real (rápido)
+          return Math.max(0, t - 10);
+        }
+        return t - 1;
+      });
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [active, time]);
+  }, [active, time, demoMode]);
 
-  // 🔥 Manejar cuando el tiempo llega a 0 (CON SONIDO Y NOTIFICACIÓN)
+  // Manejar cuando el tiempo llega a 0
   useEffect(() => {
     if (time > 0) return;
     if (tasks.length === 0) return;
 
     if (mode === "study") {
-      // 🔥 SONIDO Y NOTIFICACIÓN AL TERMINAR ESTUDIO
-      if (audioEnabled) playNotificationSound();
-      showBrowserNotification("✅ ¡Tiempo de estudio completado!", 
-        `Has terminado de estudiar "${tasks[index]?.text}". ¡Tómate un descanso!`);
-      
+      // Suena alarma de estudio
+      playStudyAlarm();
+      showNotification("⏰ ¡Tiempo completado!", `Terminaste de estudiar "${tasks[index]?.text}"`);
       completeCurrentTask();
     } else {
-      // 🔥 SONIDO Y NOTIFICACIÓN AL TERMINAR DESCANSO
-      if (audioEnabled) playBreakSound();
-      showBrowserNotification("☕ ¡Descanso terminado!", 
-        "Es hora de volver al estudio. ¡Continúa con la siguiente tarea!");
-      
+      playBreakAlarm();
+      showNotification("☕ ¡Descanso terminado!", "Es hora de volver al estudio");
       goToNextTask();
     }
   }, [time, mode, tasks.length]);
 
   const completeCurrentTask = () => {
-  const currentTask = tasks[index];
-  
-  // 🔥 SONIDO AL COMPLETAR MANUALMENTE
-  if (audioEnabled) {
-    playNotificationSound(); // o un sonido diferente
-  }
-  showBrowserNotification("✅ ¡Tarea completada!", 
-    `Has terminado "${currentTask.text}". ¡Bien hecho!`);
-  
-  const updatedTasks = [...tasks];
-  updatedTasks[index].completed = true;
-  setTasks(updatedTasks);
+    const currentTask = tasks[index];
+    
+    // 🔥 SONIDO AL COMPLETAR MANUALMENTE (para mostrar al profesor)
+    playManualCompleteSound();
+    showNotification("✅ ¡Tarea completada!", `"${currentTask.text}" - ¡Bien hecho!`);
+    
+    const updatedTasks = [...tasks];
+    updatedTasks[index].completed = true;
+    setTasks(updatedTasks);
 
-  const savedTasks = localStorage.getItem("tasks");
-  if (savedTasks) {
-    const allTasks = JSON.parse(savedTasks);
-    const taskToComplete = allTasks.find((t: any) => t.text === currentTask.text);
-    if (taskToComplete && !taskToComplete.completed) {
-      taskToComplete.completed = true;
-      localStorage.setItem("tasks", JSON.stringify(allTasks));
-      window.dispatchEvent(new Event("tasksUpdated"));
+    const savedTasks = localStorage.getItem("tasks");
+    if (savedTasks) {
+      const allTasks = JSON.parse(savedTasks);
+      const taskToComplete = allTasks.find((t: any) => t.text === currentTask.text);
+      if (taskToComplete && !taskToComplete.completed) {
+        taskToComplete.completed = true;
+        localStorage.setItem("tasks", JSON.stringify(allTasks));
+        window.dispatchEvent(new Event("tasksUpdated"));
+      }
     }
-  }
 
-  setMode("break");
-  setTime(currentTask.breakTime);
-  setActive(false);
-};
+    setMode("break");
+    setTime(currentTask.breakTime);
+    setActive(false);
+  };
+
   const goToNextTask = () => {
     const nextIndex = index + 1;
     
@@ -283,9 +274,17 @@ export default function Pomodoro() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  // Activar audio con cualquier clic
+  const handleAnyClick = () => {
+    if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
+  };
+
+  // Pantalla de completado
   if (completed || (tasks.length > 0 && tasks.every(t => t.completed === true))) {
     return (
-      <div className="text-white p-8 text-center space-y-4">
+      <div className="text-white p-8 text-center space-y-4" onClick={handleAnyClick}>
         <div className="w-20 h-20 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto animate-pulse">
           <Sparkles className="w-10 h-10 text-white" />
         </div>
@@ -301,9 +300,10 @@ export default function Pomodoro() {
     );
   }
 
+  // Sin tareas
   if (tasks.length === 0) {
     return (
-      <div className="text-white p-8 text-center">
+      <div className="text-white p-8 text-center" onClick={handleAnyClick}>
         <p className="text-gray-400">No hay un plan de estudio generado.</p>
         <p className="text-sm text-gray-500 mt-2">Ve a Tareas y genera un plan con IA.</p>
         <button
@@ -322,16 +322,23 @@ export default function Pomodoro() {
   const progressPercent = (completedCount / totalTasks) * 100;
 
   return (
-    <div className="text-white p-4 space-y-6 text-center">
-
-      {/* Botón para activar/desactivar sonido */}
-      <div className="flex justify-end">
+    <div className="text-white p-4 space-y-6 text-center" onClick={handleAnyClick}>
+      
+      {/* Botones de control */}
+      <div className="flex justify-between gap-2">
         <button
-          onClick={() => setAudioEnabled(!audioEnabled)}
+          onClick={(e) => { e.stopPropagation(); setAudioEnabled(!audioEnabled); }}
           className={`text-xs px-2 py-1 rounded-full ${audioEnabled ? 'bg-green-500/50' : 'bg-red-500/50'}`}
-          title={audioEnabled ? "Sonido activado" : "Sonido desactivado"}
         >
           {audioEnabled ? "🔊 Sonido ON" : "🔇 Sonido OFF"}
+        </button>
+        
+        <button
+          onClick={(e) => { e.stopPropagation(); setDemoMode(!demoMode); }}
+          className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${demoMode ? 'bg-yellow-500/70 text-black' : 'bg-gray-600/50'}`}
+        >
+          <Zap size={14} />
+          {demoMode ? "⚡ Demo ON (rápido)" : "Demo OFF"}
         </button>
       </div>
 
@@ -341,12 +348,8 @@ export default function Pomodoro() {
         </p>
         <h2 className="text-lg font-semibold mt-1">{currentTask.text}</h2>
         <div className="flex justify-center gap-2 mt-2">
-          <span className="text-xs text-gray-400">
-            Tarea {index + 1} de {totalTasks}
-          </span>
-          <span className="text-xs text-green-400">
-            ✅ {completedCount} completadas
-          </span>
+          <span className="text-xs text-gray-400">Tarea {index + 1} de {totalTasks}</span>
+          <span className="text-xs text-green-400">✅ {completedCount} completadas</span>
         </div>
       </div>
 
@@ -380,23 +383,17 @@ export default function Pomodoro() {
       </div>
 
       <div className="bg-white/10 rounded-full h-1.5 overflow-hidden">
-        <div
-          className="bg-gradient-to-r from-purple-400 to-pink-400 h-full transition-all"
-          style={{ width: `${progressPercent}%` }}
-        />
+        <div className="bg-gradient-to-r from-purple-400 to-pink-400 h-full transition-all" style={{ width: `${progressPercent}%` }} />
       </div>
 
       <div className="flex justify-center gap-3 flex-wrap">
         <button onClick={() => setActive(!active)} className={`p-3 rounded-full ${active ? "bg-yellow-500" : "bg-green-500"}`}>
           {active ? <Pause size={24} /> : <Play size={24} />}
         </button>
-
         <button onClick={addMoreTime} className="p-3 rounded-full bg-blue-500" title="+5 minutos">+5</button>
-
         <button onClick={resetCurrentTask} className="p-3 rounded-full bg-yellow-500">
           <RotateCcw size={24} />
         </button>
-
         {mode === "study" ? (
           <button onClick={completeCurrentTask} className="p-3 rounded-full bg-purple-500" title="Completar tarea">
             <CheckCircle size={24} />

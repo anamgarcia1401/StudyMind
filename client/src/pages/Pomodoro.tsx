@@ -18,9 +18,11 @@ export default function Pomodoro() {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const alarmTimeoutRef = useRef<number | null>(null); // ✅ CORREGIDO
+  const whiteNoiseRef = useRef<ScriptProcessorNode | null>(null); // ✅ CORREGIDO
 
-  // 🔥 Función para iniciar AudioContext
-  const playSound = (frequency: number, duration: number, volume: number = 0.3) => {
+  // 🔥🔥🔥 ALARMA EXTREMA - 10 SEGUNDOS, VOLUMEN 1.0
+  const playLongAlarm = () => {
     if (!audioEnabled) return;
     
     try {
@@ -30,49 +32,197 @@ export default function Pomodoro() {
         audioContextRef.current = audioContext;
       }
       
-      // Reanudar si está suspendido
       if (audioContext.state === "suspended") {
         audioContext.resume();
       }
       
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+      const now = audioContext.currentTime;
       
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      if (alarmTimeoutRef.current) {
+        clearTimeout(alarmTimeoutRef.current);
+      }
       
-      oscillator.frequency.value = frequency;
-      gainNode.gain.value = volume;
+      if (whiteNoiseRef.current) {
+        try {
+          whiteNoiseRef.current.disconnect();
+        } catch(e) {}
+      }
       
-      oscillator.start();
-      gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + duration);
-      oscillator.stop(audioContext.currentTime + duration);
+      const alarmDuration = 10;
+      const beepCount = 20;
+      const interval = alarmDuration / beepCount;
+      
+      for (let i = 0; i < beepCount; i++) {
+        const startTime = now + (i * interval);
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        if (i % 3 === 0) oscillator.frequency.value = 880;
+        else if (i % 3 === 1) oscillator.frequency.value = 1046.5;
+        else oscillator.frequency.value = 1318.52;
+        
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(1.0, startTime + 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.45);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.45);
+      }
+      
+      const sirenOsc = audioContext.createOscillator();
+      const sirenGain = audioContext.createGain();
+      sirenOsc.connect(sirenGain);
+      sirenGain.connect(audioContext.destination);
+      
+      sirenOsc.type = "sawtooth";
+      sirenOsc.frequency.value = 440;
+      sirenGain.gain.setValueAtTime(0, now);
+      sirenGain.gain.linearRampToValueAtTime(0.7, now + 0.1);
+      
+      const modulator = audioContext.createOscillator();
+      const modulatorGain = audioContext.createGain();
+      modulator.connect(modulatorGain);
+      modulatorGain.connect(sirenOsc.frequency);
+      modulator.frequency.value = 4;
+      modulatorGain.gain.value = 100;
+      
+      modulator.start(now);
+      modulator.stop(now + alarmDuration);
+      
+      sirenOsc.start(now);
+      sirenGain.gain.exponentialRampToValueAtTime(0.0001, now + alarmDuration);
+      sirenOsc.stop(now + alarmDuration);
+      
+      const bufferSize = 4096;
+      const whiteNoise = audioContext.createScriptProcessor(bufferSize, 1, 1);
+      const noiseGain = audioContext.createGain();
+      
+      whiteNoise.connect(noiseGain);
+      noiseGain.connect(audioContext.destination);
+      noiseGain.gain.setValueAtTime(0, now);
+      noiseGain.gain.linearRampToValueAtTime(0.5, now + 0.1);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + alarmDuration);
+      
+      whiteNoise.onaudioprocess = function(e) {
+        const output = e.outputBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          output[i] = (Math.random() * 2) - 1;
+        }
+      };
+      
+      whiteNoise.connect(audioContext.destination);
+      whiteNoiseRef.current = whiteNoise;
+      
+      setTimeout(() => {
+        try {
+          whiteNoise.disconnect();
+        } catch(e) {}
+      }, alarmDuration * 1000);
+      
+      alarmTimeoutRef.current = window.setTimeout(() => {}, alarmDuration * 1000);
+      
     } catch (e) {
-      console.log("Error reproduciendo sonido:", e);
+      console.log("Error:", e);
+      try {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const now = audioContext.currentTime;
+        for (let i = 0; i < 30; i++) {
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          osc.frequency.value = i % 2 === 0 ? 880 : 1046.5;
+          gain.gain.setValueAtTime(0, now + i * 0.2);
+          gain.gain.linearRampToValueAtTime(0.8, now + i * 0.2 + 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.2 + 0.3);
+          osc.start(now + i * 0.2);
+          osc.stop(now + i * 0.2 + 0.3);
+        }
+      } catch (err) {}
     }
   };
 
-  // 🔥 Alarma de estudio (aguda, repetitiva)
-  const playStudyAlarm = () => {
-    playSound(880, 0.3, 0.5);
-    setTimeout(() => playSound(880, 0.3, 0.5), 400);
-    setTimeout(() => playSound(880, 0.3, 0.5), 800);
-  };
-
-  // 🔥 Alarma de descanso (más grave)
   const playBreakAlarm = () => {
-    playSound(523.25, 0.5, 0.4);
+    if (!audioEnabled) return;
+    
+    try {
+      let audioContext = audioContextRef.current;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      }
+      
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      
+      const now = audioContext.currentTime;
+      const alarmDuration = 8;
+      const beepCount = 16;
+      const interval = alarmDuration / beepCount;
+      
+      for (let i = 0; i < beepCount; i++) {
+        const startTime = now + (i * interval);
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = i % 2 === 0 ? 523.25 : 659.25;
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.8, startTime + 0.03);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.4);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.4);
+      }
+    } catch (e) {
+      console.log("Error:", e);
+    }
   };
 
-  // 🔥 Sonido de completado manual (para demostración)
-  const playManualCompleteSound = () => {
-    // Sonido de "éxito" - ascendente
-    playSound(523.25, 0.2, 0.4);
-    setTimeout(() => playSound(659.25, 0.2, 0.4), 150);
-    setTimeout(() => playSound(783.99, 0.3, 0.4), 300);
+  const playSuccessSound = () => {
+    if (!audioEnabled) return;
+    
+    try {
+      let audioContext = audioContextRef.current;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      }
+      
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      
+      const now = audioContext.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 523.25, 783.99];
+      
+      notes.forEach((freq, i) => {
+        const oscillator = audioContext!.createOscillator();
+        const gainNode = audioContext!.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext!.destination);
+        
+        oscillator.frequency.value = freq;
+        
+        gainNode.gain.setValueAtTime(0, now + i * 0.12);
+        gainNode.gain.linearRampToValueAtTime(0.8, now + i * 0.12 + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.12 + 0.5);
+        
+        oscillator.start(now + i * 0.12);
+        oscillator.stop(now + i * 0.12 + 0.5);
+      });
+    } catch (e) {
+      console.log("Error:", e);
+    }
   };
 
-  // 🔥 Notificación
   const showNotification = (title: string, body: string) => {
     if (Notification.permission === "granted") {
       new Notification(title, { body });
@@ -81,11 +231,20 @@ export default function Pomodoro() {
     }
   };
 
-  // Solicitar permiso al inicio
   useEffect(() => {
     if (Notification.permission === "default") {
       Notification.requestPermission();
     }
+    return () => {
+      if (alarmTimeoutRef.current) {
+        clearTimeout(alarmTimeoutRef.current);
+      }
+      if (whiteNoiseRef.current) {
+        try {
+          whiteNoiseRef.current.disconnect();
+        } catch(e) {}
+      }
+    };
   }, []);
 
   const loadPlan = () => {
@@ -172,7 +331,6 @@ export default function Pomodoro() {
     };
   }, []);
 
-  // Timer con modo demo (acelerado)
   useEffect(() => {
     if (!active) return;
     if (time <= 0) return;
@@ -180,7 +338,6 @@ export default function Pomodoro() {
     const interval = setInterval(() => {
       setTime(t => {
         if (demoMode) {
-          // Modo demo: reduce 10 segundos por cada segundo real (rápido)
           return Math.max(0, t - 10);
         }
         return t - 1;
@@ -190,15 +347,14 @@ export default function Pomodoro() {
     return () => clearInterval(interval);
   }, [active, time, demoMode]);
 
-  // Manejar cuando el tiempo llega a 0
   useEffect(() => {
     if (time > 0) return;
     if (tasks.length === 0) return;
 
     if (mode === "study") {
-      // Suena alarma de estudio
-      playStudyAlarm();
-      showNotification("⏰ ¡Tiempo completado!", `Terminaste de estudiar "${tasks[index]?.text}"`);
+      playLongAlarm();
+      showNotification("⏰ ¡ALARMA! Tiempo de estudio completado", 
+        `Terminaste de estudiar "${tasks[index]?.text}". ¡Tómate un descanso!`);
       completeCurrentTask();
     } else {
       playBreakAlarm();
@@ -210,8 +366,7 @@ export default function Pomodoro() {
   const completeCurrentTask = () => {
     const currentTask = tasks[index];
     
-    // 🔥 SONIDO AL COMPLETAR MANUALMENTE (para mostrar al profesor)
-    playManualCompleteSound();
+    playSuccessSound();
     showNotification("✅ ¡Tarea completada!", `"${currentTask.text}" - ¡Bien hecho!`);
     
     const updatedTasks = [...tasks];
@@ -274,14 +429,12 @@ export default function Pomodoro() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Activar audio con cualquier clic
   const handleAnyClick = () => {
     if (audioContextRef.current && audioContextRef.current.state === "suspended") {
       audioContextRef.current.resume();
     }
   };
 
-  // Pantalla de completado
   if (completed || (tasks.length > 0 && tasks.every(t => t.completed === true))) {
     return (
       <div className="text-white p-8 text-center space-y-4" onClick={handleAnyClick}>
@@ -300,7 +453,6 @@ export default function Pomodoro() {
     );
   }
 
-  // Sin tareas
   if (tasks.length === 0) {
     return (
       <div className="text-white p-8 text-center" onClick={handleAnyClick}>
@@ -324,7 +476,6 @@ export default function Pomodoro() {
   return (
     <div className="text-white p-4 space-y-6 text-center" onClick={handleAnyClick}>
       
-      {/* Botones de control */}
       <div className="flex justify-between gap-2">
         <button
           onClick={(e) => { e.stopPropagation(); setAudioEnabled(!audioEnabled); }}
@@ -338,7 +489,7 @@ export default function Pomodoro() {
           className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${demoMode ? 'bg-yellow-500/70 text-black' : 'bg-gray-600/50'}`}
         >
           <Zap size={14} />
-          {demoMode ? "⚡ Demo ON (rápido)" : "Demo OFF"}
+          {demoMode ? "⚡ Demo ON" : "Demo OFF"}
         </button>
       </div>
 

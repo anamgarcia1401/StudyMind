@@ -19,6 +19,7 @@ function getRealStudyTime(task) {
     text.includes('proyecto final') ||
     text.includes('trabajo final') ||
     text.includes('repaso') ||
+    text.includes('proyecto') ||
     text.includes('repasar')
   ) {
     return 210; // 3.5 horas
@@ -55,8 +56,8 @@ function getRealStudyTime(task) {
 
 function getBreakTime(priority, studyMinutes) {
   if (priority === 'alta') return 30;
-  if (priority === 'media') return 20;
-  return 10;
+  if (priority === 'media') return 25;
+  return 15;
 }
 
 function generateStudyPlan(tasks) {

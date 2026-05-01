@@ -116,27 +116,30 @@ export default function Tasks() {
   };
 
   const generatePlan = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("https://studymind-backend-ayco.onrender.com", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tasks }),
-      });
+  setLoading(true);
+  try {
+    // URL fija del backend en Render
+    const API_URL = "https://studymind-backend-nuevo.onrender.com/api/plan";
+    
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks }),
+    });
 
-      const data = await res.json();
-      setPlan(data);
-      setShowPlan(true);
-      localStorage.setItem("studyPlan", JSON.stringify(data));
-      window.dispatchEvent(new Event("planUpdate"));
-      
-    } catch (error) {
-      alert("❌ Error: asegúrate que el backend esté corriendo en https://studymind-backend-ayco.onrender.com");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+    const data = await res.json();
+    setPlan(data);
+    setShowPlan(true);
+    localStorage.setItem("studyPlan", JSON.stringify(data));
+    window.dispatchEvent(new Event("planUpdate"));
+    
+  } catch (error) {
+    console.error("Error:", error);
+    alert("❌ Error al conectar con el servidor. Intenta de nuevo.");
+  } finally {
+    setLoading(false);
+  }
+};
   const pendingTasks = tasks.filter(t => !t.completed).length;
   const completedTasks = tasks.filter(t => t.completed).length;
   const totalTasks = tasks.length;

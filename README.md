@@ -126,24 +126,7 @@ StudyMind/
 └── README.md
 ```
 
----
-
-## 🧠 CÓMO FUNCIONA LA IA
-
-La IA analiza el texto de cada tarea y asigna tiempos según palabras clave:
-
-| Palabra clave | Tiempo asignado |
-|---------------|-----------------|
-| parcial, examen, final | 3.5 horas (210 min) |
-| proyecto, trabajo final | 3.5 horas (210 min) |
-| taller, workshop | 2.5 horas (150 min) |
-| Prioridad Alta | 3 horas (180 min) |
-| Prioridad Media | 2.5 horas (150 min) |
-| Prioridad Baja | 1.5 horas (90 min) |
-
-Luego genera un plan ordenado por prioridad, con tiempos de estudio y descanso, y lo envía al temporizador Pomodoro.
-
----
+----
 
 ## ✅ FUNCIONALIDADES COMPLETAS
 

@@ -499,7 +499,7 @@ export default function Pomodoro() {
         </p>
         <h2 className="text-lg font-semibold mt-1">{currentTask.text}</h2>
         <div className="flex justify-center gap-2 mt-2">
-          <span className="text-xs text-gray-400">Tarea {index + 1} de {totalTasks}</span>
+          <span className="text-xs text-gray-400">Tarea {index + 1} de {totalTasks}</span>    
           <span className="text-xs text-green-400">✅ {completedCount} completadas</span>
         </div>
       </div>

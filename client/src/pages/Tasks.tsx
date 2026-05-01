@@ -118,7 +118,7 @@ export default function Tasks() {
   const generatePlan = async () => {
     setLoading(true);
     try {
-      const res = await fetch("https://studymind-backend-ayco.onrender.com/", {
+      const res = await fetch("https://studymind-backend-ayco.onrender.com", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tasks }),
@@ -131,7 +131,7 @@ export default function Tasks() {
       window.dispatchEvent(new Event("planUpdate"));
       
     } catch (error) {
-      alert("❌ Error: asegúrate que el backend esté corriendo en https://studymind-backend-ayco.onrender.com/");
+      alert("❌ Error: asegúrate que el backend esté corriendo en https://studymind-backend-ayco.onrender.com");
     } finally {
       setLoading(false);
     }

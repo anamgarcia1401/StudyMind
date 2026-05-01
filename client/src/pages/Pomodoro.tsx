@@ -248,59 +248,84 @@ export default function Pomodoro() {
   }, []);
 
   const loadPlan = () => {
-    const plan = localStorage.getItem("studyPlan");
-    if (!plan) {
+  const plan = localStorage.getItem("studyPlan");
+  console.log("📋 Cargando plan en móvil:", plan);
+
+  if (!plan) {
+    console.log("❌ No hay plan");
+    setTasks([]);
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(plan);
+    console.log("📋 Plan parseado:", parsed);
+    
+    if (!parsed.plan || parsed.plan.length === 0) {
+      console.log("❌ Plan sin tareas");
       setTasks([]);
+      // Antes del return, agrega un estado de carga
+const [isLoading, setIsLoading] = useState(true);
+
+// En el useEffect principal, después de cargar:
+useEffect(() => {
+  loadPlan();
+  setIsLoading(false);
+  // ... resto del código
+}, []);
+
+// Luego, antes de mostrar la pantalla:
+if (isLoading) {
+  return (
+    <div className="text-white p-8 text-center">
+      <p>Cargando...</p>
+    </div>
+  );
+}
       return;
     }
 
-    try {
-      const parsed = JSON.parse(plan);
-      if (!parsed.plan || parsed.plan.length === 0) {
-        setTasks([]);
-        return;
-      }
+    const savedTasks = localStorage.getItem("tasks");
+    const completedTasksTexts = savedTasks ? 
+      JSON.parse(savedTasks).filter((t: any) => t.completed === true).map((t: any) => t.text) : [];
 
-      const savedTasks = localStorage.getItem("tasks");
-      const completedTasksTexts = savedTasks ? 
-        JSON.parse(savedTasks).filter((t: any) => t.completed === true).map((t: any) => t.text) : [];
-
-      const newTasks: PomodoroTask[] = [];
-      for (let i = 0; i < parsed.plan.length; i++) {
-        const p = parsed.plan[i];
-        newTasks.push({
-          text: p.task,
-          studyTime: p.studySeconds || 25 * 60,
-          breakTime: p.breakSeconds || 5 * 60,
-          completed: completedTasksTexts.includes(p.task) || false
-        });
-      }
-
-      setTasks(newTasks);
-      
-      let firstPendingIndex = -1;
-      for (let i = 0; i < newTasks.length; i++) {
-        if (newTasks[i].completed === false) {
-          firstPendingIndex = i;
-          break;
-        }
-      }
-      
-      if (firstPendingIndex !== -1) {
-        setIndex(firstPendingIndex);
-        setMode("study");
-        setTime(newTasks[firstPendingIndex].studyTime);
-        setCompleted(false);
-      } else if (newTasks.length > 0) {
-        setCompleted(true);
-      }
-      
-      setActive(false);
-    } catch (e) {
-      console.error("Error loading plan:", e);
-      setTasks([]);
+    const newTasks: PomodoroTask[] = [];
+    for (let i = 0; i < parsed.plan.length; i++) {
+      const p = parsed.plan[i];
+      newTasks.push({
+        text: p.task,
+        studyTime: p.studySeconds || 25 * 60,
+        breakTime: p.breakSeconds || 5 * 60,
+        completed: completedTasksTexts.includes(p.task) || false
+      });
     }
-  };
+
+    console.log("✅ Tareas cargadas:", newTasks.length);
+    setTasks(newTasks);
+    
+    let firstPendingIndex = -1;
+    for (let i = 0; i < newTasks.length; i++) {
+      if (newTasks[i].completed === false) {
+        firstPendingIndex = i;
+        break;
+      }
+    }
+    
+    if (firstPendingIndex !== -1) {
+      setIndex(firstPendingIndex);
+      setMode("study");
+      setTime(newTasks[firstPendingIndex].studyTime);
+      setCompleted(false);
+    } else if (newTasks.length > 0) {
+      setCompleted(true);
+    }
+    
+    setActive(false);
+  } catch (e) {
+    console.error("❌ Error loading plan:", e);
+    setTasks([]);
+  }
+};
 
   useEffect(() => {
     loadPlan();

@@ -17,11 +17,38 @@ export default function Pomodoro() {
   const [completed, setCompleted] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // 🔥 ALARMA EXTREMA (10 segundos, volumen máximo)
+  // Detectar si es móvil
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Sonido simplificado para móvil (fallback)
+  const playSimpleBeep = () => {
+    if (!audioEnabled) return;
+    try {
+      const audio = new Audio();
+      audio.src = "data:audio/wav;base64,U3RlYWx0aCBzb3VuZCBub3QgYXZhaWxhYmxl";
+      audio.volume = 0.8;
+      audio.play().catch(() => {});
+    } catch (e) {}
+  };
+
+  // Alarma completa solo en PC
   const playLongAlarm = () => {
     if (!audioEnabled) return;
+    
+    if (isMobile) {
+      playSimpleBeep();
+      return;
+    }
     
     try {
       let audioContext = audioContextRef.current;
@@ -35,12 +62,8 @@ export default function Pomodoro() {
       }
       
       const now = audioContext.currentTime;
-      const alarmDuration = 10;
-      const beepCount = 20;
-      const interval = alarmDuration / beepCount;
-      
-      for (let i = 0; i < beepCount; i++) {
-        const startTime = now + (i * interval);
+      for (let i = 0; i < 12; i++) {
+        const startTime = now + (i * 0.4);
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         
@@ -49,19 +72,24 @@ export default function Pomodoro() {
         
         oscillator.frequency.value = i % 2 === 0 ? 880 : 1046.5;
         gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(0.8, startTime + 0.03);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.4);
+        gainNode.gain.linearRampToValueAtTime(0.6, startTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.35);
         
         oscillator.start(startTime);
-        oscillator.stop(startTime + 0.4);
+        oscillator.stop(startTime + 0.35);
       }
     } catch (e) {
-      console.log("Error:", e);
+      playSimpleBeep();
     }
   };
 
   const playBreakAlarm = () => {
     if (!audioEnabled) return;
+    
+    if (isMobile) {
+      playSimpleBeep();
+      return;
+    }
     
     try {
       let audioContext = audioContextRef.current;
@@ -75,7 +103,7 @@ export default function Pomodoro() {
       }
       
       const now = audioContext.currentTime;
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i = 5; i++) {
         const startTime = now + (i * 0.5);
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
@@ -85,19 +113,24 @@ export default function Pomodoro() {
         
         oscillator.frequency.value = 523.25;
         gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(0.6, startTime + 0.05);
+        gainNode.gain.linearRampToValueAtTime(0.5, startTime + 0.05);
         gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.3);
         
         oscillator.start(startTime);
         oscillator.stop(startTime + 0.3);
       }
     } catch (e) {
-      console.log("Error:", e);
+      playSimpleBeep();
     }
   };
 
   const playSuccessSound = () => {
     if (!audioEnabled) return;
+    
+    if (isMobile) {
+      playSimpleBeep();
+      return;
+    }
     
     try {
       let audioContext = audioContextRef.current;
@@ -111,7 +144,7 @@ export default function Pomodoro() {
       }
       
       const now = audioContext.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.5];
+      const notes = [523.25, 659.25, 783.99];
       notes.forEach((freq, i) => {
         const oscillator = audioContext!.createOscillator();
         const gainNode = audioContext!.createGain();
@@ -120,29 +153,29 @@ export default function Pomodoro() {
         gainNode.connect(audioContext!.destination);
         
         oscillator.frequency.value = freq;
-        gainNode.gain.setValueAtTime(0, now + i * 0.15);
-        gainNode.gain.linearRampToValueAtTime(0.6, now + i * 0.15 + 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.15 + 0.4);
+        gainNode.gain.setValueAtTime(0, now + i * 0.2);
+        gainNode.gain.linearRampToValueAtTime(0.5, now + i * 0.2 + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.2 + 0.35);
         
-        oscillator.start(now + i * 0.15);
-        oscillator.stop(now + i * 0.15 + 0.4);
+        oscillator.start(now + i * 0.2);
+        oscillator.stop(now + i * 0.2 + 0.35);
       });
     } catch (e) {
-      console.log("Error:", e);
+      playSimpleBeep();
     }
   };
 
   const showNotification = (title: string, body: string) => {
-    if (Notification.permission === "granted") {
+    if (Notification.permission === "granted" && !isMobile) {
       new Notification(title, { body });
     }
   };
 
   useEffect(() => {
-    if (Notification.permission === "default") {
+    if (Notification.permission === "default" && !isMobile) {
       Notification.requestPermission();
     }
-  }, []);
+  }, [isMobile]);
 
   const loadPlan = () => {
     try {
@@ -241,11 +274,11 @@ export default function Pomodoro() {
 
     if (mode === "study") {
       playLongAlarm();
-      showNotification("⏰ ¡Tiempo completado!", `Terminaste "${tasks[index]?.text}"`);
+      showNotification("⏰ Tiempo completado!", `Terminaste "${tasks[index]?.text}"`);
       completeCurrentTask();
     } else {
       playBreakAlarm();
-      showNotification("☕ ¡Descanso terminado!", "Vuelve al estudio");
+      showNotification("☕ Descanso terminado!", "Vuelve al estudio");
       goToNextTask();
     }
   }, [time, mode, tasks.length]);
@@ -255,7 +288,7 @@ export default function Pomodoro() {
     if (!currentTask) return;
     
     playSuccessSound();
-    showNotification("✅ ¡Tarea completada!", `"${currentTask.text}" - ¡Bien hecho!`);
+    showNotification("✅ Tarea completada!", `"${currentTask.text}"`);
     
     const updatedTasks = [...tasks];
     updatedTasks[index].completed = true;
@@ -370,47 +403,50 @@ export default function Pomodoro() {
 
       <div>
         <p className="text-xs text-gray-400">{mode === "study" ? "📚 ESTUDIANDO" : "☕ DESCANSO"}</p>
-        <h2 className="text-lg font-semibold mt-1">{currentTask.text}</h2>
+        <h2 className="text-lg font-semibold mt-1 line-clamp-2 px-2">{currentTask.text}</h2>
         <div className="flex justify-center gap-2 mt-2">
           <span className="text-xs text-gray-400">Tarea {index + 1} de {totalTasks}</span>
           <span className="text-xs text-green-400">✅ {completedCount} completadas</span>
         </div>
       </div>
 
-      {/* Timer - Responsive (grande en PC, mediano en móvil) */}
-      <div className="bg-white/10 rounded-2xl py-8 px-4 mx-auto max-w-[280px] md:max-w-[320px]">
-        <div className="text-5xl md:text-6xl font-mono font-bold tracking-wider text-center text-white">
+      {/* Timer - Diseño responsivo que funciona en móvil */}
+      <div className="bg-white/10 rounded-2xl py-6 px-4 mx-auto max-w-[260px] sm:max-w-[300px] md:max-w-[340px]">
+        <div className="text-4xl sm:text-5xl md:text-6xl font-mono font-bold tracking-wider text-center text-white break-all">
           {formatTime(time)}
         </div>
-        <div className="text-xs text-gray-400 mt-3 text-center">
-          {mode === "study" ? "⏱️ tiempo restante de estudio" : "☕ tiempo de descanso"}
+        <div className="text-[11px] sm:text-xs text-gray-400 mt-2 text-center">
+          {mode === "study" ? "⏱️ tiempo de estudio" : "☕ tiempo de descanso"}
         </div>
       </div>
 
+      {/* Barra de progreso */}
       <div className="bg-white/10 rounded-full h-1.5 overflow-hidden max-w-[280px] mx-auto">
         <div className="bg-gradient-to-r from-purple-400 to-pink-400 h-full transition-all" style={{ width: `${progressPercent}%` }} />
       </div>
 
-      <div className="flex justify-center gap-3 flex-wrap">
-        <button onClick={() => setActive(!active)} className={`p-3 rounded-full ${active ? "bg-yellow-500" : "bg-green-500"}`}>
-          {active ? <Pause size={24} /> : <Play size={24} />}
+      {/* Botones */}
+      <div className="flex justify-center gap-2 sm:gap-3 flex-wrap">
+        <button onClick={() => setActive(!active)} className={`p-2 sm:p-3 rounded-full ${active ? "bg-yellow-500" : "bg-green-500"}`}>
+          {active ? <Pause size={20} /> : <Play size={20} />}
         </button>
-        <button onClick={addMoreTime} className="p-3 rounded-full bg-blue-500" title="+5 minutos">+5</button>
-        <button onClick={resetCurrentTask} className="p-3 rounded-full bg-yellow-500">
-          <RotateCcw size={24} />
+        <button onClick={addMoreTime} className="p-2 sm:p-3 rounded-full bg-blue-500 text-sm sm:text-base" title="+5 minutos">+5</button>
+        <button onClick={resetCurrentTask} className="p-2 sm:p-3 rounded-full bg-yellow-500">
+          <RotateCcw size={20} />
         </button>
         {mode === "study" ? (
-          <button onClick={completeCurrentTask} className="p-3 rounded-full bg-purple-500" title="Completar tarea">
-            <CheckCircle size={24} />
+          <button onClick={completeCurrentTask} className="p-2 sm:p-3 rounded-full bg-purple-500" title="Completar tarea">
+            <CheckCircle size={20} />
           </button>
         ) : (
-          <button onClick={skipBreak} className="p-3 rounded-full bg-green-500 flex items-center gap-1">
-            <SkipForward size={24} />
-            <span className="text-sm">Saltar</span>
+          <button onClick={skipBreak} className="p-2 sm:p-3 rounded-full bg-green-500 flex items-center gap-1">
+            <SkipForward size={20} />
+            <span className="text-xs hidden sm:inline">Saltar</span>
           </button>
         )}
       </div>
 
+      {/* Lista de tareas */}
       {tasks.length > 0 && (
         <div className="mt-4">
           <p className="text-xs text-gray-400 mb-2">📋 Plan de estudio:</p>
@@ -418,14 +454,14 @@ export default function Pomodoro() {
             {tasks.map((task, idx) => (
               <div key={idx} className={`flex items-center gap-2 text-xs p-1.5 rounded-lg ${idx === index && mode === "study" && !task.completed ? "bg-purple-500/20" : ""}`}>
                 {task.completed ? (
-                  <CheckCircle size={12} className="text-green-400" />
+                  <CheckCircle size={12} className="text-green-400 flex-shrink-0" />
                 ) : idx === index && mode === "study" ? (
-                  <span className="text-purple-400 text-xs">▶</span>
+                  <span className="text-purple-400 text-xs flex-shrink-0">▶</span>
                 ) : (
-                  <span className="w-3 h-3 rounded-full bg-white/20" />
+                  <span className="w-3 h-3 rounded-full bg-white/20 flex-shrink-0" />
                 )}
-                <span className={`flex-1 text-left ${task.completed ? "line-through text-gray-500" : "text-white/80"}`}>{task.text}</span>
-                <span className="text-gray-500 text-[10px]">{Math.floor(task.studyTime / 60)}min</span>
+                <span className={`flex-1 text-left truncate ${task.completed ? "line-through text-gray-500" : "text-white/80"}`}>{task.text}</span>
+                <span className="text-gray-500 text-[10px] flex-shrink-0">{Math.floor(task.studyTime / 60)}min</span>
               </div>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, SkipForward, CheckCircle, Sparkles, Zap } from "lucide-react";
 
 type PomodoroTask = {
@@ -15,27 +15,138 @@ export default function Pomodoro() {
   const [mode, setMode] = useState<"study" | "break">("study");
   const [active, setActive] = useState(false);
   const [completed, setCompleted] = useState(false);
-  const [demoMode, setDemoMode] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Versión simplificada de sonido (solo si el usuario interactúa)
-  const playSound = () => {
+  // 🔥 ALARMA EXTREMA (10 segundos, volumen máximo)
+  const playLongAlarm = () => {
     if (!audioEnabled) return;
+    
     try {
-      const audio = new Audio();
-      audio.src = "data:audio/wav;base64,U3RlYWx0aCBzb3VuZCBub3QgYXZhaWxhYmxl";
-      audio.play().catch(() => {});
+      let audioContext = audioContextRef.current;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      }
+      
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      
+      const now = audioContext.currentTime;
+      const alarmDuration = 10;
+      const beepCount = 20;
+      const interval = alarmDuration / beepCount;
+      
+      for (let i = 0; i < beepCount; i++) {
+        const startTime = now + (i * interval);
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = i % 2 === 0 ? 880 : 1046.5;
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.8, startTime + 0.03);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.4);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.4);
+      }
     } catch (e) {
-      console.log("Audio no soportado");
+      console.log("Error:", e);
     }
   };
+
+  const playBreakAlarm = () => {
+    if (!audioEnabled) return;
+    
+    try {
+      let audioContext = audioContextRef.current;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      }
+      
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      
+      const now = audioContext.currentTime;
+      for (let i = 0; i < 6; i++) {
+        const startTime = now + (i * 0.5);
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 523.25;
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(0.6, startTime + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.3);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.3);
+      }
+    } catch (e) {
+      console.log("Error:", e);
+    }
+  };
+
+  const playSuccessSound = () => {
+    if (!audioEnabled) return;
+    
+    try {
+      let audioContext = audioContextRef.current;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioContextRef.current = audioContext;
+      }
+      
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+      
+      const now = audioContext.currentTime;
+      const notes = [523.25, 659.25, 783.99, 1046.5];
+      notes.forEach((freq, i) => {
+        const oscillator = audioContext!.createOscillator();
+        const gainNode = audioContext!.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext!.destination);
+        
+        oscillator.frequency.value = freq;
+        gainNode.gain.setValueAtTime(0, now + i * 0.15);
+        gainNode.gain.linearRampToValueAtTime(0.6, now + i * 0.15 + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.15 + 0.4);
+        
+        oscillator.start(now + i * 0.15);
+        oscillator.stop(now + i * 0.15 + 0.4);
+      });
+    } catch (e) {
+      console.log("Error:", e);
+    }
+  };
+
+  const showNotification = (title: string, body: string) => {
+    if (Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  };
+
+  useEffect(() => {
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
 
   const loadPlan = () => {
     try {
       const plan = localStorage.getItem("studyPlan");
-      console.log("Plan:", plan);
-      
       if (!plan) {
         setTasks([]);
         return;
@@ -70,13 +181,11 @@ export default function Pomodoro() {
         setMode("study");
         setTime(newTasks[firstPendingIndex].studyTime);
         setCompleted(false);
-        setError(null);
       } else if (newTasks.length > 0) {
         setCompleted(true);
       }
     } catch (e) {
       console.error("Error:", e);
-      setError("Error al cargar el plan");
       setTasks([]);
     }
   };
@@ -131,10 +240,12 @@ export default function Pomodoro() {
     if (tasks.length === 0) return;
 
     if (mode === "study") {
-      playSound();
+      playLongAlarm();
+      showNotification("⏰ ¡Tiempo completado!", `Terminaste "${tasks[index]?.text}"`);
       completeCurrentTask();
     } else {
-      playSound();
+      playBreakAlarm();
+      showNotification("☕ ¡Descanso terminado!", "Vuelve al estudio");
       goToNextTask();
     }
   }, [time, mode, tasks.length]);
@@ -142,6 +253,9 @@ export default function Pomodoro() {
   const completeCurrentTask = () => {
     const currentTask = tasks[index];
     if (!currentTask) return;
+    
+    playSuccessSound();
+    showNotification("✅ ¡Tarea completada!", `"${currentTask.text}" - ¡Bien hecho!`);
     
     const updatedTasks = [...tasks];
     updatedTasks[index].completed = true;
@@ -200,24 +314,14 @@ export default function Pomodoro() {
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Activar audio con cualquier clic (para móviles)
   const handleAnyClick = () => {
-    setAudioEnabled(true);
+    if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+      audioContextRef.current.resume();
+    }
   };
-
-  if (error) {
-    return (
-      <div className="text-white p-8 text-center" onClick={handleAnyClick}>
-        <p className="text-red-400">{error}</p>
-        <button onClick={() => window.location.href = "/tasks"} className="mt-4 bg-purple-500 px-4 py-2 rounded-lg">
-          Ir a Tareas
-        </button>
-      </div>
-    );
-  }
 
   if (completed || (tasks.length > 0 && tasks.every(t => t.completed === true))) {
     return (
@@ -251,17 +355,6 @@ export default function Pomodoro() {
   const completedCount = tasks.filter(t => t.completed === true).length;
   const progressPercent = totalTasks ? (completedCount / totalTasks) * 100 : 0;
 
-  if (!currentTask) {
-    return (
-      <div className="text-white p-8 text-center" onClick={handleAnyClick}>
-        <p className="text-gray-400">Error: No hay tarea seleccionada</p>
-        <button onClick={() => window.location.href = "/tasks"} className="mt-4 bg-purple-500 px-4 py-2 rounded-lg">
-          Volver
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="text-white p-4 space-y-6 text-center" onClick={handleAnyClick}>
       
@@ -284,17 +377,17 @@ export default function Pomodoro() {
         </div>
       </div>
 
-      {/* Timer simplificado - sin SVG para móvil */}
-      <div className="bg-white/10 rounded-2xl p-6 mx-auto max-w-[200px]">
-        <div className="text-5xl font-mono font-bold tracking-wider text-center">
+      {/* Timer - Responsive (grande en PC, mediano en móvil) */}
+      <div className="bg-white/10 rounded-2xl py-8 px-4 mx-auto max-w-[280px] md:max-w-[320px]">
+        <div className="text-5xl md:text-6xl font-mono font-bold tracking-wider text-center text-white">
           {formatTime(time)}
         </div>
-        <div className="text-xs text-gray-400 mt-2 text-center">
-          {mode === "study" ? "tiempo restante" : "descanso"}
+        <div className="text-xs text-gray-400 mt-3 text-center">
+          {mode === "study" ? "⏱️ tiempo restante de estudio" : "☕ tiempo de descanso"}
         </div>
       </div>
 
-      <div className="bg-white/10 rounded-full h-1.5 overflow-hidden">
+      <div className="bg-white/10 rounded-full h-1.5 overflow-hidden max-w-[280px] mx-auto">
         <div className="bg-gradient-to-r from-purple-400 to-pink-400 h-full transition-all" style={{ width: `${progressPercent}%` }} />
       </div>
 
